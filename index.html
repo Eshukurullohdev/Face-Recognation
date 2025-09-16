@@ -103,7 +103,7 @@
   }
 
   async function startRecognition() {
-    const labels = ['shukurulloh','mohira','ziyohidin','humoyun', 'nosirbek.jpg', 'gulsanam.jpg', 'abdurahim.jpg']; // xodimlar
+    const labels = ['shukurulloh','mohira','ziyohidin','humoyun', 'nosirbek.jpg', ]; // xodimlar
     const labeledDescriptors = await loadLabeledImages(labels);
     faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.6);
 
