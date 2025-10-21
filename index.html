@@ -3,53 +3,80 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Xodimlarni Tanib Olish — Kuchli Versiya</title>
+  <title>Xodimlarni Tanib Olish (Yengil versiya)</title>
   <style>
-    body { font-family: Arial, sans-serif; display:flex; flex-direction:column; align-items:center; gap:20px; padding:16px; background:#f0f2f5; }
+    body {
+      font-family: Arial, sans-serif;
+      display:flex; flex-direction:column; align-items:center;
+      gap:20px; padding:16px; background:#f0f2f5;
+      overflow-x: hidden;
+    }
     #frame { position:relative; }
-    video { display:block; width:640px; height:480px; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,0.2); background:black; }
+    video {
+      display:block; width:640px; height:480px;
+      border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,0.2);
+      background:black;
+    }
     canvas { position:absolute; left:0; top:0; }
-    table { border-collapse: collapse; width:90%; background:#fff; box-shadow:0 2px 8px rgba(0,0,0,0.1); border-radius:8px; overflow:hidden; margin-top:12px; }
+    table {
+      border-collapse: collapse; width:90%; background:#fff;
+      box-shadow:0 2px 8px rgba(0,0,0,0.1);
+      border-radius:8px; overflow:hidden; margin-top:12px;
+    }
     th, td { border:1px solid #ddd; padding:8px; text-align:center; }
     th { background:#0078d4; color:white; }
-    #archiveBtn { margin-top:12px; padding:8px 16px; border:none; border-radius:6px; background:#0078d4; color:white; cursor:pointer; }
-    /* Modal */
-    #archiveModal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); justify-content:center; align-items:center; }
-    #archiveContent { background:white; padding:20px; border-radius:12px; max-height:80%; overflow:auto; width:80%; box-shadow:0 6px 16px rgba(0,0,0,0.3); }
-    #closeArchive { float:right; cursor:pointer; color:#333; font-weight:bold; }
+
+    /* 🔹 Hush kelibsiz animatsiyasi */
+    #welcome-message {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: linear-gradient(135deg, #0078d4, #00c6ff);
+      color: white;
+      padding: 16px 28px;
+      border-radius: 12px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.25);
+      font-size: 18px;
+      font-weight: bold;
+      opacity: 0;
+      pointer-events: none;
+      z-index: 999;
+      animation: fadeInDown 0.6s ease forwards;
+    }
+
+    @keyframes fadeInDown {
+      0% { opacity: 0; transform: translate(-50%, -40px); }
+      100% { opacity: 1; transform: translate(-50%, 0); }
+    }
+    @keyframes fadeOutUp {
+      0% { opacity: 1; transform: translate(-50%, 0); }
+      100% { opacity: 0; transform: translate(-50%, -40px); }
+    }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
 </head>
 <body>
-  <h2>Xodimlarni Tanib Olish</h2>
+  <h2>Xodimlarni Tanib Olish (Yengil versiya)</h2>
   <div id="frame">
-    <video id="video" autoplay muted></video>
+    <video id="video" autoplay muted playsinline></video>
     <canvas id="overlay" width="640" height="480"></canvas>
   </div>
 
   <h3>Bugungi qatnashuv</h3>
   <table id="attendanceTable">
     <thead>
-      <tr>
-        <th>Ism</th>
-        <th>Sana</th>
-        <th>Soat</th>
-      </tr>
+      <tr><th>Ism</th><th>Sana</th><th>Soat</th></tr>
     </thead>
     <tbody></tbody>
   </table>
 
-  <button id="archiveBtn">📂 Arxivni Ko‘rish</button>
+  <!-- Tovushlar -->
   <audio id="beep" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg"></audio>
+  <audio id="welcomeSound" src="https://cdn.pixabay.com/download/audio/2021/09/08/audio_398ee40b5f.mp3?filename=welcome-102334.mp3"></audio>
 
-  <!-- Modal -->
-  <div id="archiveModal">
-    <div id="archiveContent">
-      <span id="closeArchive">❌</span>
-      <h3>📂 Arxiv</h3>
-      <div id="archiveTables"></div>
-    </div>
-  </div>
+  <!-- 🔹 Hush kelibsiz xabari uchun joy -->
+  <div id="welcome-message" style="display:none;"></div>
 
 <script>
 const MODEL_URL = 'https://cdn.jsdelivr.net/gh/vladmandic/face-api/model/';
@@ -57,12 +84,10 @@ const video = document.getElementById('video');
 const canvas = document.getElementById('overlay');
 const ctx = canvas.getContext('2d');
 let faceMatcher = null;
-let recognizedToday = {}; 
-let lastSeen = {};
-
+let recognizedToday = {};
 const todayKey = new Date().toISOString().split('T')[0];
 
-// LocalStorage Attendance
+// Attendance
 function loadAttendance() {
   const data = JSON.parse(localStorage.getItem('attendance') || '{}');
   if (!data[todayKey]) data[todayKey] = [];
@@ -71,95 +96,102 @@ function loadAttendance() {
 function saveAttendance(data) {
   localStorage.setItem('attendance', JSON.stringify(data));
 }
-
 const attendanceData = loadAttendance();
 recognizedToday = Object.fromEntries(attendanceData[todayKey].map(r => [r.name, true]));
 renderTable(attendanceData[todayKey]);
 
-// Models yuklash
+// Models
 async function loadModels() {
-  await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL); // kuchliroq model
+  await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
   await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
   await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
-  console.log("Models loaded (ssdMobilenetv1)");
+  console.log("✅ Yengil modelllar yuklandi");
 }
 
-// Har bir xodim uchun bir nechta surat yuklash
+// Xodimlar
 async function loadLabeledImages(labels) {
   const labeledDescriptors = [];
   for (const label of labels) {
-    const descriptors = [];
-    for (let i = 1; i <= 3; i++) {
-      try {
-        const img = await faceapi.fetchImage(`employees/${label}/${i}.jpg`);
-        const det = await faceapi.detectSingleFace(img).withFaceLandmarks().withFaceDescriptor();
-        if (det) descriptors.push(det.descriptor);
-      } catch {}
-    }
-    if (descriptors.length > 0) {
-      labeledDescriptors.push(new faceapi.LabeledFaceDescriptors(label, descriptors));
-      console.log("Loaded:", label, descriptors.length, "ta rasm");
+    try {
+      const img = await faceapi.fetchImage(`employees/${label}.jpg`);
+      const det = await faceapi.detectSingleFace(img, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptor();
+      if (det) labeledDescriptors.push(new faceapi.LabeledFaceDescriptors(label, [det.descriptor]));
+    } catch (e) {
+      console.warn(`⚠️ Rasm topilmadi: ${label}`);
     }
   }
   return labeledDescriptors;
 }
 
-// Stabilizatsiya: ketma-ket 2 marta chiqsa
-function stableRecognition(label) {
-  const now = Date.now();
-  if (!lastSeen[label]) lastSeen[label] = [];
-  lastSeen[label].push(now);
-  lastSeen[label] = lastSeen[label].filter(t => now - t < 1000);
-  return lastSeen[label].length >= 2;
+// 🔹 Hush kelibsiz xabarini ko‘rsatish
+function showWelcomeMessage(name) {
+  const box = document.getElementById("welcome-message");
+  const sound = document.getElementById("welcomeSound");
+
+  box.innerHTML = `👋 Hush kelibsiz, ${name}!`;
+  box.style.display = "block";
+  box.style.animation = "fadeInDown 0.6s ease forwards";
+
+  // 🔊 Welcome tovushi
+  sound.currentTime = 0;
+  sound.play();
+
+  setTimeout(() => {
+    box.style.animation = "fadeOutUp 0.6s ease forwards";
+    setTimeout(() => (box.style.display = "none"), 600);
+  }, 3000);
 }
 
+// Asosiy
 async function startRecognition() {
-  const labels = ['shukurulloh','mohira','ziyohidin','humoyun','nosirbek']; 
+  const labels = ['Ergashev Shukurulloh','Mamasodiqov Humoyun','Sotqinov Nosirbek', 'Botirova Gulsanam', 'Olimov Ismoiljon', 'Tojidinova Robiya', 'Azizov Ibrohimjon', 'Solohidinova Muhlisa', 'Axmedov Asadbek', 'Gulomova Mavluda', 'Inoyatova Shaxnoza', 'Bahodirov Diyorbek'];
   const labeledDescriptors = await loadLabeledImages(labels);
-  faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.45); // threshold pastroq
+  if (labeledDescriptors.length === 0) return alert("⚠️ Hech qanday xodim rasmi topilmadi!");
 
+  faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.5);
   const stream = await navigator.mediaDevices.getUserMedia({ video: true });
   video.srcObject = stream;
-  await video.play();
 
-  canvas.width = video.videoWidth || 640;
-  canvas.height = video.videoHeight || 480;
+  video.onloadedmetadata = () => {
+    video.play();
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+    console.log("🎥 Kamera tayyor");
 
-  setInterval(async () => {
-    const detections = await faceapi.detectAllFaces(video).withFaceLandmarks().withFaceDescriptors();
-    const resized = faceapi.resizeResults(detections, { width: canvas.width, height: canvas.height });
-    ctx.clearRect(0,0,canvas.width,canvas.height);
+    setInterval(async () => {
+      const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 }))
+        .withFaceLandmarks().withFaceDescriptors();
 
-    for (let d of resized) {
-      const box = d.detection.box;
-      ctx.strokeStyle = '#00ff99';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(box.x, box.y, box.width, box.height);
+      const resized = faceapi.resizeResults(detections, { width: canvas.width, height: canvas.height });
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      let label = 'unknown';
-      if (faceMatcher) {
+      for (let d of resized) {
+        const box = d.detection.box;
         const best = faceMatcher.findBestMatch(d.descriptor);
-        label = best.label;
-      }
+        const label = best.label;
 
-      ctx.fillStyle = 'rgba(0,0,0,0.6)';
-      ctx.fillRect(box.x, box.y + box.height - 18, box.width, 18);
-      ctx.fillStyle = '#fff';
-      ctx.font = '14px sans-serif';
-      ctx.fillText(label, box.x + 4, box.y + box.height - 4);
+        ctx.strokeStyle = '#00ff99';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(box.x, box.y, box.width, box.height);
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillRect(box.x, box.y + box.height - 20, box.width, 20);
+        ctx.fillStyle = '#fff';
+        ctx.font = '14px sans-serif';
+        ctx.fillText(label, box.x + 5, box.y + box.height - 5);
 
-      // ✅ faqat 1 marta kuniga yoziladi
-      if (label !== 'unknown' && !recognizedToday[label] && stableRecognition(label)) {
-        recognizedToday[label] = true;
-        const now = new Date();
-        const record = { name: label, date: todayKey, time: now.toLocaleTimeString() };
-        attendanceData[todayKey].push(record);
-        saveAttendance(attendanceData);
-        renderTable(attendanceData[todayKey]);
-        document.getElementById("beep").play();
+        if (label !== 'unknown' && !recognizedToday[label]) {
+          recognizedToday[label] = true;
+          const now = new Date();
+          const record = { name: label, date: todayKey, time: now.toLocaleTimeString() };
+          attendanceData[todayKey].push(record);
+          saveAttendance(attendanceData);
+          renderTable(attendanceData[todayKey]);
+          document.getElementById("beep").play();
+          showWelcomeMessage(label); // 👋 xabar + tovush
+        }
       }
-    }
-  }, 400);
+    }, 2000);
+  };
 }
 
 function renderTable(records) {
@@ -171,34 +203,6 @@ function renderTable(records) {
     tbody.appendChild(tr);
   });
 }
-
-// 📂 Arxivni ko'rsatish
-document.getElementById("archiveBtn").addEventListener("click", () => {
-  const all = JSON.parse(localStorage.getItem("attendance") || '{}');
-  const container = document.getElementById("archiveTables");
-  container.innerHTML = "";
-  for (const day in all) {
-    const title = document.createElement("h4");
-    title.textContent = "📅 " + day;
-    container.appendChild(title);
-
-    const table = document.createElement("table");
-    table.innerHTML = `<thead><tr><th>Ism</th><th>Sana</th><th>Soat</th></tr></thead><tbody></tbody>`;
-    const tbody = table.querySelector("tbody");
-    all[day].forEach(r => {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `<td>${r.name}</td><td>${r.date}</td><td>${r.time}</td>`;
-      tbody.appendChild(tr);
-    });
-    container.appendChild(table);
-  }
-  document.getElementById("archiveModal").style.display = "flex";
-});
-
-// ❌ Modal yopish
-document.getElementById("closeArchive").addEventListener("click", () => {
-  document.getElementById("archiveModal").style.display = "none";
-});
 
 loadModels().then(startRecognition);
 </script>
