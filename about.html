@@ -77,6 +77,10 @@ function loadAttendance() {
   if (!data[todayKey]) data[todayKey] = [];
   return data;
 }
+
+
+
+
 function saveAttendance(data) {
   localStorage.setItem('attendance', JSON.stringify(data));
 }
