@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Xodimlarni Tanib Olish (Aniq versiya)</title>
+  <title>Xodimlarni Tanib Olish (Ovozli versiya)</title>
   <style>
     body {
       font-family: "Segoe UI", sans-serif;
@@ -38,7 +38,7 @@
   <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
 </head>
 <body>
-  <h3>Xodimlarni Tanib Olish (Aniq va Yengil versiya)</h3>
+  <h3>Xodimlarni Tanib Olish (Ovozli versiya)</h3>
   <div id="frame">
     <video id="video" autoplay muted playsinline></video>
     <canvas id="overlay" width="320" height="240"></canvas>
@@ -52,7 +52,8 @@
     <tbody></tbody>
   </table>
 
-  <audio id="beep" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg"></audio>
+  <!-- 🔊 Ovozli fayl -->
+  <audio id="voice" src="Recording_8_converted.mp3" preload="auto"></audio>
 
 <script>
 const MODEL_URL = 'https://cdn.jsdelivr.net/gh/vladmandic/face-api/model/';
@@ -60,6 +61,7 @@ const video = document.getElementById('video');
 const canvas = document.getElementById('overlay');
 const ctx = canvas.getContext('2d');
 const welcome = document.getElementById("welcome");
+const voice = document.getElementById("voice");
 
 const todayKey = new Date().toISOString().split('T')[0];
 let faceMatcher = null;
@@ -164,19 +166,20 @@ async function detectLoop() {
         attendanceData[todayKey].push(rec);
         saveAttendance(attendanceData);
         renderTable(attendanceData[todayKey]);
-        document.getElementById("beep").play();
-        showWelcome(label);
+        playWelcome(label);
       }
     }
   }
 
-  setTimeout(detectLoop, CHECK_INTERVAL); // har 800ms da tekshirish
+  setTimeout(detectLoop, CHECK_INTERVAL);
 }
 
-// 🔹 Hush kelibsiz banner
-function showWelcome(name) {
+// 🔊 Ovozli “Hush kelibsiz”
+function playWelcome(name) {
   welcome.innerText = `👋 Hush kelibsiz, ${name}!`;
   welcome.classList.add("show");
+  voice.currentTime = 0;
+  voice.play();
   setTimeout(() => welcome.classList.remove("show"), 3000);
 }
 
