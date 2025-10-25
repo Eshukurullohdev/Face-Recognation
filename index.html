@@ -116,7 +116,7 @@ async function loadLabeledImages(labels, perPerson=3) {
 
 // 🔹 Kamera ishga tushirish
 async function startRecognition() {
-  const labels = ['Ergashev Shukurulloh','Mamasodiqov Humoyun','Sotqinov Nosirbek','Botirova Gulsanam','Olimov Ismoiljon','Tojidinova Robiya','Azizov Ibrohimjon','Solohidinova Muhlisa','Axmedov Asadbek','Gulomova Mavluda','Inoyatova Shaxnoza','Bahodirov Diyorbek'];
+  const labels = ['Ergashev Shukurulloh', 'Orinboyev Abdurahim', 'Mominov Abduhalil', 'Sharobidinova Omina', 'Baxramjonova Feruza',  , 'Mamasodiqov Humoyun','Sotqinov Nosirbek','Botirova Gulsanam','Olimov Ismoiljon','Tojidinova Robiya','Azizov Ibrohimjon','Solohidinova Muhlisa','Axmedov Asadbek','Gulomova Mavluda','Inoyatova Shaxnoza','Bahodirov Diyorbek'];
   const labeledDescriptors = await loadLabeledImages(labels);
   if (labeledDescriptors.length === 0) return alert("⚠️ Hech qanday xodim rasmi topilmadi!");
 
