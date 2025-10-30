@@ -3,13 +3,12 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Xodimlarni Tanib Olish (Ovozli versiya)</title>
+  <title>Xodimlarni Tanib Olish (Google Sheets bilan)</title>
   <style>
     body {
       font-family: "Segoe UI", sans-serif;
       display:flex; flex-direction:column; align-items:center;
       background:#f3f4f6; margin:0; padding:16px;
-      user-select:none; overflow-x:hidden;
     }
     #frame { position:relative; }
     video {
@@ -38,7 +37,8 @@
   <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
 </head>
 <body>
-  <h3>Xodimlarni Tanib Olish (Ovozli versiya)</h3>
+  <h3>Xodimlarni Tanib Olish (Google Sheets bilan)</h3>
+
   <div id="frame">
     <video id="video" autoplay muted playsinline></video>
     <canvas id="overlay" width="320" height="240"></canvas>
@@ -52,7 +52,6 @@
     <tbody></tbody>
   </table>
 
-  <!-- 🔊 Ovozli fayl -->
   <audio id="voice" src="Recording_8_converted.mp3" preload="auto"></audio>
 
 <script>
@@ -66,20 +65,20 @@ const voice = document.getElementById("voice");
 const todayKey = new Date().toISOString().split('T')[0];
 let faceMatcher = null;
 let recognizedToday = {};
-let lastSeen = {}; // barqaror aniqlik uchun
+let lastSeen = {};
+const THRESHOLD = 0.42;
+const STABLE_REQUIRED = 2;
+const CHECK_INTERVAL = 800;
 
-// Sozlamalar
-const THRESHOLD = 0.42;       // aniqlik (kichik bo‘lsa, qat’iyroq)
-const STABLE_REQUIRED = 2;    // necha marta ketma-ket aniqlansa qabul qilinadi
-const CHECK_INTERVAL = 800;   // ms, necha vaqt oralig‘ida tekshiriladi
+// 🔹 Google Sheets URL — BU YERNI O‘ZGARTIR ❗️
+const GOOGLE_SHEETS_URL = "https://script.google.com/macros/s/AKfycbzNw0G9GxLZWoOiopztMKios-i3RSzY9IHkJDE2Ztjb0qD9braTcr9JoVHuX79hi4Tr/exec";
 
-// 🔹 Local saqlash
+// 🔹 Ma’lumotlarni localStorage’da saqlash
 function loadAttendance() {
   const data = JSON.parse(localStorage.getItem('attendance') || '{}');
   if (!data[todayKey]) data[todayKey] = [];
   return data;
 }
-
 function saveAttendance(data) {
   localStorage.setItem('attendance', JSON.stringify(data));
 }
@@ -92,49 +91,39 @@ async function loadModels() {
   await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
   await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
   await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
-  console.log("✅ Modellar yuklandi (TinyFaceDetector)");
+  console.log("✅ Modellar yuklandi");
 }
 
-// 🔹 Ko‘p rasmli yuklovchi (aniqlik uchun)
-async function loadLabeledImages(labels, perPerson=3) {
+// 🔹 Yuzni yuklash
+async function loadLabeledImages(labels) {
   const labeledDescriptors = [];
   for (const label of labels) {
-    const descriptors = [];
-    for (let i=1; i<=perPerson; i++) {
-      try {
-        const img = await faceapi.fetchImage(`employees/${label}.jpg`);
-        const det = await faceapi.detectSingleFace(img, new faceapi.TinyFaceDetectorOptions({inputSize:160}))
-          .withFaceLandmarks().withFaceDescriptor();
-        if (det) descriptors.push(det.descriptor);
-      } catch(e) {}
-    }
-    if (descriptors.length > 0)
-      labeledDescriptors.push(new faceapi.LabeledFaceDescriptors(label, descriptors));
+    try {
+      const img = await faceapi.fetchImage(`employees/${label}.jpg`);
+      const det = await faceapi.detectSingleFace(img, new faceapi.TinyFaceDetectorOptions({inputSize:160}))
+        .withFaceLandmarks().withFaceDescriptor();
+      if (det) labeledDescriptors.push(new faceapi.LabeledFaceDescriptors(label, [det.descriptor]));
+    } catch (e) {}
   }
   return labeledDescriptors;
 }
 
-// 🔹 Kamera ishga tushirish
+// 🔹 Kamera va aniqlashni boshlash
 async function startRecognition() {
-  const labels = ['Ergashev Shukurulloh', 'Orinboyev Abdurahim', 'Mominov Abduhalil', 'Sharobidinova Omina', 'Baxramjonova Feruza',  , 'Mamasodiqov Humoyun','Sotqinov Nosirbek','Botirova Gulsanam','Olimov Ismoiljon','Tojidinova Robiya','Azizov Ibrohimjon','Solohidinova Muhlisa','Axmedov Asadbek','Gulomova Mavluda','Inoyatova Shaxnoza','Bahodirov Diyorbek'];
+  const labels = ['Ergashev Shukurulloh', 'Orinboyev Abdurahim', 'Mominov Abduhalil', 'Sharobidinova Omina'];
   const labeledDescriptors = await loadLabeledImages(labels);
-  if (labeledDescriptors.length === 0) return alert("⚠️ Hech qanday xodim rasmi topilmadi!");
+  if (labeledDescriptors.length === 0) return alert("⚠️ Xodim rasmi topilmadi!");
 
   faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, THRESHOLD);
   const stream = await navigator.mediaDevices.getUserMedia({ video: { width:320, height:240 } });
   video.srcObject = stream;
-  video.onloadedmetadata = () => {
-    video.play();
-    console.log("🎥 Kamera ishga tushdi");
-    detectLoop();
-  };
+  video.onloadedmetadata = () => { video.play(); detectLoop(); };
 }
 
-// 🔹 Asosiy aniqlash (barqaror)
+// 🔹 Asosiy aniqlash
 async function detectLoop() {
-  const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({inputSize:160, scoreThreshold:0.5}))
+  const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({inputSize:160}))
     .withFaceLandmarks().withFaceDescriptors();
-
   const resized = faceapi.resizeResults(detections, { width: canvas.width, height: canvas.height });
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -153,7 +142,6 @@ async function detectLoop() {
     ctx.font = '13px sans-serif';
     ctx.fillText(`${label} (${distance})`, box.x + 4, box.y + box.height - 4);
 
-    // Barqarorlikni tekshirish
     if (label !== 'unknown' && distance < THRESHOLD) {
       const now = Date.now();
       if (!lastSeen[label]) lastSeen[label] = [];
@@ -167,14 +155,28 @@ async function detectLoop() {
         saveAttendance(attendanceData);
         renderTable(attendanceData[todayKey]);
         playWelcome(label);
+        sendToGoogleSheet(rec); // 🔥 Google Sheets’ga yuborish
       }
     }
   }
-
   setTimeout(detectLoop, CHECK_INTERVAL);
 }
 
-// 🔊 Ovozli “Hush kelibsiz”
+// 🔹 Google Sheets’ga yuborish
+async function sendToGoogleSheet(record) {
+  try {
+    await fetch(GOOGLE_SHEETS_URL, {
+      method: "POST",
+      body: JSON.stringify(record),
+      headers: { "Content-Type": "application/json" }
+    });
+    console.log("📤 Google Sheets’ga yuborildi:", record);
+  } catch (e) {
+    console.error("⚠️ Google Sheets’ga yuborishda xato:", e);
+  }
+}
+
+// 🔹 Ovozli “Hush kelibsiz”
 function playWelcome(name) {
   welcome.innerText = `👋 Hush kelibsiz, ${name}!`;
   welcome.classList.add("show");
@@ -183,7 +185,7 @@ function playWelcome(name) {
   setTimeout(() => welcome.classList.remove("show"), 3000);
 }
 
-// 🔹 Jadval chizish
+// 🔹 Jadvalni chizish
 function renderTable(records) {
   const tbody = document.querySelector("#attendanceTable tbody");
   tbody.innerHTML = "";
